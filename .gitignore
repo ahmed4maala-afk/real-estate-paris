@@ -1,0 +1,53 @@
+# ===== Virtual Environment =====
+venv/
+env/
+.venv/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+
+# ===== Jupyter =====
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ===== Data files (too large for Git) =====
+data/raw/*.csv
+data/raw/*.xlsx
+data/raw/*.json
+data/processed/*.csv
+data/processed/*.xlsx
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Sensitive data =====
+.env
+.env.local
+*.key
+secrets/
+credentials.json
+
+# ===== Logs =====
+*.log
+logs/
+
+# ===== Temporary files =====
+tmp/
+temp/
+*.tmp
