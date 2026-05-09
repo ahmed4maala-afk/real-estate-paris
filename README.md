@@ -54,7 +54,7 @@ real-estate-paris/
 
 \`\`\`bash
 # 1. Clone the repository
-git clone https://github.com/[username]/real-estate-paris.git
+git clone https://github.com/ahmed4maala-afk/real-estate-paris.git
 cd real-estate-paris
 
 # 2. Create virtual environment
