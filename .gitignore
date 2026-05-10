@@ -14,14 +14,15 @@ __pycache__/
 
 # ===== Jupyter =====
 .ipynb_checkpoints/
-*.ipynb_checkpoints
 
-# ===== Data files (too large for Git) =====
-data/raw/*.csv
-data/raw/*.xlsx
-data/raw/*.json
-data/processed/*.csv
-data/processed/*.xlsx
+# ===== Data files (CRITICAL: never commit large data) =====
+*.csv
+*.csv.gz
+*.xlsx
+*.json
+*.parquet
+data/raw/
+data/processed/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
