@@ -7,7 +7,7 @@
 ## 👥 Team
 
 - **Ahmed Maala** — ahmed4maala@gmail.com
-- **Natalja Voth**
+- **Natalja Voth** — nvwonthave@gmail.com
 
 ## 🎯 Project Goal
 
