@@ -153,3 +153,23 @@
 ---
 
 **Status:** Planning phase — waiting for Yaniv's Draw.io link
+---
+
+## 📌 Update — May 18, 2026
+
+### My Progress Today
+- Studied 3NF Snowflake Schema concepts
+- Created initial SQL schema draft: design/schema_draft.sql
+- Schema includes:
+  - Fact table: fact_property_transaction (DVF)
+  - Dimensions: time, location, property_type
+  - Snowflake element: green_space → green_space_category
+
+### Branch
+- Working on: feature/sql-schema-draft
+
+### Pending
+- Get Confluence access (waiting for invitation)
+- Review Natalja's UML diagram
+- Align SQL schema with the UML
+- Get Yaniv's approval before implementation
