@@ -2,10 +2,10 @@
 -- Real Estate Analysis in Paris
 -- Step 2: Database Schema (3NF Snowflake)
 --
--- Datasets: DVF (Property Transactions) + Open Spaces
+-- Datasets: DVF (Property Transactions) + Risk Sectors
 -- Author: Ahmed Maala
 -- Date: May 2026
--- Status: DRAFT - pending UML diagram review & Yaniv's approval
+-- Status: DRAFT - pending Yaniv's approval
 -- ============================================================
 
 
@@ -15,8 +15,7 @@
 
 -- ------------------------------------------------------------
 -- Time Dimension
--- Stores date information for transactions
--- Based on: date_mutation column
+-- Based on: date_mutation column (DVF)
 -- ------------------------------------------------------------
 CREATE TABLE dim_time (
     date_id         NUMBER AUTOINCREMENT,
@@ -31,9 +30,8 @@ CREATE TABLE dim_time (
 
 -- ------------------------------------------------------------
 -- Location Dimension
--- Stores geographic information
--- Based on: code_postal, code_commune, nom_commune,
---           code_departement, latitude, longitude
+-- Shared by both DVF and Risk Sectors datasets
+-- Based on: code_postal, nom_commune, latitude, longitude
 -- ------------------------------------------------------------
 CREATE TABLE dim_location (
     location_id         NUMBER AUTOINCREMENT,
@@ -41,6 +39,7 @@ CREATE TABLE dim_location (
     code_commune        VARCHAR(10),
     nom_commune         VARCHAR(100),
     code_departement    VARCHAR(3),
+    arrondissement      NUMBER(2),
     latitude            FLOAT,
     longitude           FLOAT,
 
@@ -50,8 +49,7 @@ CREATE TABLE dim_location (
 
 -- ------------------------------------------------------------
 -- Property Type Dimension
--- Stores property categories
--- Based on: type_local column
+-- Based on: type_local column (DVF)
 -- ------------------------------------------------------------
 CREATE TABLE dim_property_type (
     property_type_id    NUMBER AUTOINCREMENT,
@@ -63,8 +61,7 @@ CREATE TABLE dim_property_type (
 
 -- ------------------------------------------------------------
 -- Mutation Type Dimension
--- Stores transaction types (Vente, etc.)
--- Based on: nature_mutation column
+-- Based on: nature_mutation column (DVF)
 -- ------------------------------------------------------------
 CREATE TABLE dim_mutation_type (
     mutation_type_id    NUMBER AUTOINCREMENT,
@@ -75,38 +72,40 @@ CREATE TABLE dim_mutation_type (
 
 
 -- ------------------------------------------------------------
--- Green Space Category Dimension (Sub-dimension)
--- Snowflake style: separated for normalization (3NF)
+-- Risk Type Sub-Dimension (Snowflake element!)
+-- Based on: type_risque column (Risk Sectors)
+-- Examples: Flood risk, Quarry, Stormwater
 -- ------------------------------------------------------------
-CREATE TABLE dim_green_space_category (
-    category_id     NUMBER AUTOINCREMENT,
-    category_name   VARCHAR(50),
+CREATE TABLE dim_risk_type (
+    risk_type_id    NUMBER AUTOINCREMENT,
+    type_risque     VARCHAR(100),
 
-    PRIMARY KEY (category_id)
+    PRIMARY KEY (risk_type_id)
 );
 
 
 -- ============================================================
--- SECTION 2: SNOWFLAKE DIMENSION (links to sub-dimension)
+-- SECTION 2: SNOWFLAKE DIMENSION
 -- ============================================================
 
 -- ------------------------------------------------------------
--- Green Space Dimension
--- Links to category (sub-dimension) and location
--- This demonstrates the "Snowflake" structure
+-- Risk Zone Dimension
+-- Links to risk_type (sub-dimension) = Snowflake structure
+-- Based on: Risk Sectors dataset (plub_pprizone)
+-- Columns: gid, zone, libelle, surface, arrondissement
 -- ------------------------------------------------------------
-CREATE TABLE dim_green_space (
-    green_space_id      NUMBER AUTOINCREMENT,
-    category_id         NUMBER,
-    location_id         NUMBER,
-    name                VARCHAR(200),
-    surface             FLOAT,
-    year_opened         NUMBER(4),
-    year_renovated      NUMBER(4),
+CREATE TABLE dim_risk_zone (
+    risk_zone_id    NUMBER AUTOINCREMENT,
+    risk_type_id    NUMBER,
+    location_id     NUMBER,
+    gid             VARCHAR(50),
+    zone            VARCHAR(100),
+    libelle         VARCHAR(200),
+    surface         FLOAT,
 
-    PRIMARY KEY (green_space_id),
-    FOREIGN KEY (category_id)
-        REFERENCES dim_green_space_category(category_id),
+    PRIMARY KEY (risk_zone_id),
+    FOREIGN KEY (risk_type_id)
+        REFERENCES dim_risk_type(risk_type_id),
     FOREIGN KEY (location_id)
         REFERENCES dim_location(location_id)
 );
@@ -118,9 +117,8 @@ CREATE TABLE dim_green_space (
 
 -- ------------------------------------------------------------
 -- Property Transaction Fact Table
--- The central table - stores all property sales (DVF)
--- Based on: id_mutation, valeur_fonciere, surface_reelle_bati,
---           nombre_pieces_principales, nombre_lots
+-- Central table - stores all DVF property sales
+-- Based on: DVF cleaned dataset (45,207 rows, 21 columns)
 -- ------------------------------------------------------------
 CREATE TABLE fact_property_transaction (
     transaction_id      NUMBER AUTOINCREMENT,
@@ -151,24 +149,21 @@ CREATE TABLE fact_property_transaction (
 -- SCHEMA NOTES
 -- ============================================================
 --
--- DESIGN APPROACH (3NF Snowflake):
--- - Fact table: fact_property_transaction (DVF data)
--- - Dimensions: time, location, property_type, mutation_type
--- - Snowflake element: dim_green_space links to
---   dim_green_space_category (sub-dimension)
+-- DESIGN: 3NF Snowflake Schema
 --
--- WHY SNOWFLAKE:
--- - Green space categories are normalized into a separate
---   table to avoid repetition (3NF principle)
--- - Reduces data redundancy
+-- SNOWFLAKE ELEMENT:
+--   dim_risk_zone → dim_risk_type (sub-dimension)
+--   This separates risk categories for better normalization
 --
--- DATA SOURCE NOTES:
--- - DVF cleaned dataset: 45,207 rows, 21 columns, 0 missing
--- - All key columns (id_mutation, nature_mutation, etc.)
---   have 0% missing values
+-- HOW DATASETS CONNECT:
+--   fact_property_transaction → dim_location ← dim_risk_zone
+--   Both datasets share location via code_postal/arrondissement
+--   This allows analysis like:
+--   "Do properties in flood-risk zones have lower prices?"
 --
--- PENDING:
--- - Align with Natalja's UML diagram
--- - Yaniv's review and approval before implementation
+-- DATA SOURCES:
+--   DVF 2022: 45,207 clean transactions, 0 missing values
+--   Risk Sectors: 1,653 risk zones (plub_pprizone)
 --
+-- PENDING: Yaniv's review and approval
 -- ============================================================
