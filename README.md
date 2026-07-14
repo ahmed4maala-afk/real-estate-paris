@@ -1,157 +1,165 @@
-# 🏠 Real Estate Analysis in Paris
+# Paris Real Estate Analytics — End-to-End Data Pipeline
 
-A data engineering project to analyze real estate prices in Paris using public French data sources.
+**A complete ETL pipeline from raw French open data to a Snowflake star-schema warehouse and a 5-page Power BI report — analyzing 45,207 Paris property transactions (€82.36bn total value) against flood-risk zoning and geographic distribution.**
 
----
-
-## 👥 Team
-
-- **Ahmed Maala** — ahmed4maala@gmail.com
-- **Natalja Voth** — nvwonthave@gmail.com
-
-**Mentor:** Yaniv (Data Engineer at Liora)
+🎓 **Capstone project — Analytics Engineer program, Liora × Sorbonne. Defended June 2026.**
 
 ---
 
-## 🎯 Project Goal
+## The Question
 
-Build an ETL pipeline to analyze real estate prices in Paris using:
-- DVF dataset (property sales)
-- opendata.paris API (rent control, risk sectors, green spaces)
+Paris property data is public — but it ships unusable. The DVF national register is 4.67M rows of France-wide transactions. The city's risk zoning lives behind a separate API.
 
----
-
-## 📊 Data Sources
-
-| # | Source | Description | Link |
-|---|--------|-------------|------|
-| 1 | DVF 2022 | Property sales in France | [data.gouv.fr](https://www.data.gouv.fr/fr/datasets/demandes-de-valeurs-foncieres-geolocalisees/) |
-| 2 | opendata.paris | Paris open data portal | [opendata.paris.fr](https://opendata.paris.fr) |
-| 3 | Risk Sectors | Flood risk areas (PLU Bioclimatique 2024) | `plub_pprizone` |
-| 4 | Rent Control | Legal rent prices | `logement-encadrement-des-loyers` |
-| 5 | Green Spaces | Open spaces to be planted (PLU Bioclimatique 2024) | `plub_elpv` |
+**The task:** bring them into one warehouse and answer what the raw files cannot — *how is the Paris market actually segmented, and what is the price structure inside it?*
 
 ---
 
-## 🛠️ Tech Stack
+## Headline Finding
 
-- **Language:** Python 3.11+
-- **Libraries:** pandas, numpy, matplotlib, seaborn, requests
-- **Notebooks:** Jupyter
-- **Database:** Snowflake (Step 2+)
-- **Schema:** 3NF Snowflake Schema
-- **Modeling Tool:** Draw.io
-- **BI Tool:** Power BI (Step 4)
-- **Version Control:** Git + GitHub
+> **Luxury properties account for 28.08% of all Paris transactions — at an average of €5.52M.**
+
+Not a niche. Not the tail. **More than one in four transactions.** A DAX segmentation layer over the fact table splits the market into three bands that are invisible in the flat DVF export:
+
+| Segment | Transactions | Share |
+|---|---:|---:|
+| Mid-range | 21K | 45.35% |
+| **Luxury** | **13K** | **28.08%** |
+| Budget | 12K | 26.57% |
+
+The price gap between bands is not gradual — it is a cliff. Luxury averages **€5.52M**; the other two bands sit an order of magnitude below.
+
+![Price segmentation](docs/img/07_price_segmentation.png)
 
 ---
 
-## 📁 Project Structure
-real-estate-paris/
-│
-├── data/
-│   ├── raw/              # Original datasets (gitignored)
-│   └── processed/        # Cleaned datasets (gitignored)
-│├── design/               # Step 2: UML diagrams (Draw.io)
-│
-├── docs/                 # Team reports & documentation
-│   └── step2/            # Step 2 progress notes
-│
-├── notebooks/            # Jupyter analysis notebooks
-│
-├── reports/              # Final deliverables
-│   └── Step1_Final_Report.pdf
-│
-├── scripts/              # Python production scripts
-│
-├── .gitignore
-├── README.md
+## Market at a Glance
+
+| | |
+|---|---|
+| Transactions | **45,207** |
+| Total property value | **€82.36bn** |
+| Average property price | **€1.82M** |
+| Average price per m² | **€30,890** |
+| Average building surface | **58.98 m²** |
+| Average rooms | **2.16** |
+| Risk zones integrated | **1,653** |
+
+![Market overview](docs/img/06_market_overview.png)
+
+**Structural facts the data surfaces:**
+- **Apartments dominate** — 40K of 45K transactions (88.72%). Houses are statistically negligible in Paris (0.16%).
+- **75008 (8th arrondissement) is the price outlier** — average property price approaching €10M, roughly 2.5× the next-highest postal code.
+- Surface and room count correlate positively, but with a long tail of large-surface / low-room commercial units.
+
+---
+
+## The Pipeline
+
+![ETL pipeline and star schema design](docs/img/01_etl_star_schema.png)
+
+### Extract
+| Source | Content | Volume |
+|---|---|---|
+| [DVF 2022](https://www.data.gouv.fr/) | French property sales register (CSV) | 4.67M rows nationwide |
+| Paris Open Data API | Flood-risk zones (PLU Bioclimatique) | 1,653 zones |
+
+### Transform
+- DVF filtered from **4.67M → 45,207 Paris transactions**
+- Missing values cleaned; exact duplicates removed
+- Date and attribute formats standardized; Year / Month / Quarter attributes generated
+- Surrogate keys generated; categorical attributes encoded
+- DVF and risk-zone datasets joined on location
+- Six dimension tables built and mapped to a star model
+
+### Load
+- **Snowflake** — warehouse `COMPUTE_WH`, database `REAL_ESTATE_PARIS`
+- **Auto-truncate on load** — makes the pipeline idempotent; re-running never produces duplicate rows
+
+---
+
+## Data Model — Star Schema
+
+![Star schema architecture](docs/img/02_star_schema_architecture.png)
+
+**1 fact table · 6 dimensions**
+
+| Table | Grain / Role |
+|---|---|
+| `FACT_PROPERTY_TRANSACTION` | One row per property transaction — property value (EUR), building surface (m²), rooms, lots |
+| `DIM_TIME` | Date, year, quarter, month, day of week |
+| `DIM_LOCATION` | City, postal code, arrondissement, latitude, longitude |
+| `DIM_PROPERTY_TYPE` | Appartement / Maison / Local industriel |
+| `DIM_MUTATION_TYPE` | Vente, Échange, Vente en l'état futur, Adjudication, Vente terrain à bâtir |
+| `DIM_RISK_TYPE` | Risk classification |
+| `DIM_RISK_ZONE` | Zone geometry, surface, label |
+
+Star (not 3NF) was chosen deliberately: the analytical workload is aggregation-heavy and read-only, so denormalized dimensions cut join depth and let Power BI's DAX engine resolve slicers without traversing snowflaked branches.
+
+---
+
+## Analysis Pages
+
+### Market dynamics & risk
+![Market dynamics](docs/img/03_market_dynamics.png)
+Transaction distribution by mutation type (`Vente` overwhelmingly dominant), and the surface-to-rooms relationship with its long commercial tail.
+
+### Property type & location
+![Property type insights](docs/img/04_property_type_insights.png)
+Average price and room count by property type. Houses offer significantly more rooms than apartments — but are almost absent from the Paris market.
+
+### Geographic distribution
+![Geographic distribution](docs/img/05_geographic_map.png)
+Transaction value mapped across Paris arrondissements. The 8th arrondissement cluster is visible as the dominant bubble.
+
+---
+
+## Stack
+
+| Layer | Tool |
+|---|---|
+| Language | Python 3.11 |
+| Processing | pandas, NumPy, requests |
+| Warehouse | Snowflake |
+| Modeling | Star schema (1 fact · 6 dimensions) · dbdiagram.io |
+| BI | Power BI Desktop (DAX, Power Query) |
+| Version control | Git / GitHub |
+
+---
+
+## Repository Contents
+
+```
+.
+├── notebooks/
+│   ├── 01_data_exploration.ipynb      # DVF analysis
+│   └── 02_opendata_paris_api.ipynb    # Risk-zone API integration
+├── scripts/                           # Production ETL scripts
+├── design/                            # Star schema diagram
+├── docs/img/                          # Power BI report screenshots
 └── requirements.txt
----
+```
 
-## 🚀 Setup Instructions
+> The full Power BI report — 5 pages, star schema, DAX measures, interactive slicers — is available on request (`.pbix`, exceeds GitHub's file-size limit).
 
-### 1. Clone the repository
+## Reproduce
+
 ```bash
 git clone https://github.com/ahmed4maala-afk/real-estate-paris.git
 cd real-estate-paris
-```
-
-### 2. Create virtual environment
-```bash
-python -m venv venv
-```
-
-### 3. Activate virtual environment
-
-**Windows:**
-```bash
-.\venv\Scripts\Activate.ps1
-```
-
-**Mac/Linux:**
-```bash
-source venv/bin/activate
-```
-
-### 4. Install dependencies
-```bash
+python -m venv venv && source venv/bin/activate   # Windows: .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
 ---
 
-## 📅 Project Timeline
+## Team
 
-| Step | Description | Deadline | Status |
-|------|-------------|----------|--------|
-| 1 | Unstructured Data Exploration | May 14, 2026 | ✅ Done |
-| 2 | Data Modeling (3NF Snowflake) | May 28, 2026 | 🔄 In Progress |
-| 3 | ETL Pipeline | June 8, 2026 | ⏳ Pending |
-| 4 | Power BI Dashboard + Defense | June 15, 2026 | ⏳ Pending |
+**Ahmed Maala** · **Natalja Voth**
+Mentor: **Yaniv** — Data Engineer, Liora
 
 ---
 
-## 📊 Step 1 — Data Exploration (✅ Completed)
+## Author
 
-### Results
-- **DVF 2022:** Cleaned from 4.67M to 45,207 Paris transactions (99.4% memory reduction)
-- **API Integration:** 18,921 records from 3 opendata.paris datasets
-- **Total:** 64,128 high-quality records across 4 datasets
-
-### Deliverables
-- `notebooks/01_data_exploration.ipynb` — DVF analysis
-- `notebooks/02_opendata_paris_api.ipynb` — API integration
-- `reports/Step1_Final_Report.pdf` — Comprehensive Step 1 report
-
----
-
-## 🗂️ Step 2 — Database Modeling (🔄 In Progress)
-
-### Approach (Decided by Yaniv on May 15, 2026)
-- **Schema Type:** 3NF Snowflake Schema
-- **Tool:** Draw.io for UML diagram
-- **Implementation:** Snowflake SQL
-
-### Focus Datasets
-1. DVF 2022 (Property Transactions) — Primary
-2. Open Spaces (Green Spaces) — Secondary
-3. Additional dataset (TBD)
-
-### Process
-1. **Design** UML diagram in Draw.io
-2. **Validate** diagram with Yaniv
-3. **Implement** approved schema in Snowflake SQL
-
-### Next Check-in
-**Thursday, May 22, 2026 at 6 PM** — Review schema draft with Yaniv
-
----
-
-## 📝 License
-
-This project is part of the Liora Data Engineering Training program.
-
----
-
-**Last Updated:** May 15, 2026
+**Ahmed Maala** — Analytics Engineer (Liora × Sorbonne)
+📧 ahmed4maala@gmail.com · [GitHub](https://github.com/ahmed4maala-afk) · [LinkedIn](https://linkedin.com/in/ahmed-maala-b854b0390)
